@@ -22,7 +22,8 @@ _PARSER.add_argument(
     help='Full path to photo file.')
 _PARSER.add_argument(
     '--video', required=False, type=str, default=None,
-    help = 'Full path of stitched video file including GPMF track.')
+    help = ('Full path of stitched video file including GPMF track. Note that '
+            'uploading video requires being whitelisted for ALPHA_TESTER.'))
 _PARSER.add_argument(
     '--client_secrets',
     required=True,
@@ -241,12 +242,12 @@ def _upload_photo_sequence(args):
 
     _upload_file_resumable(args, uploadUrl, _VIDEO_CONTENT_TYPE)
 
-    # photoSequenceRequest = {
-    #         'uploadReference': {'uploadUrl': uploadUrl},
-    # }
-    # photoSequenceResponse = _STREET_VIEW_PUBLISH_API.photoSequence().create(
-    #     body=photoSequenceRequest, inputType="VIDEO").execute()
-    # print('Photo sequence created: %s' % photoSequenceResponse['name'])
+    photoSequenceRequest = {
+            'uploadReference': {'uploadUrl': uploadUrl},
+    }
+    photoSequenceResponse = _STREET_VIEW_PUBLISH_API.photoSequence().create(
+        body=photoSequenceRequest, inputType="VIDEO").execute()
+    print('Photo sequence created: %s' % photoSequenceResponse['name'])
 
 
 def main():
