@@ -1,3 +1,43 @@
+"""Tool for uploading 360 photos or videos to the Street View Publish API.
+
+This script uploads 360 photos or videos to the Street View Publish API.
+
+When uploading photos, the Google Maps API is used to associate the photo with a
+place.
+
+As of 2019-02-17, uploading photo sequences is only available for alpha testers,
+therefore it is expected that the GCP project specified by the `developer_key`
+has been whitelisted to use photo sequences.
+
+Example usage for photo specifying the coordinates:
+
+    $ python3 streetview_uploader.py \
+        --client_secrets=/path/to/client_secrets \
+        --googlemaps_key=GOOGLE_MAPS_API_KEY \
+        --developer_key=API_KEY_OF_THE_GCP_PROJECT \
+        --photo=/path/to/photo_file \
+        --lat=LATITUDE \
+        --lon=LONGITUDE
+
+Example usage for photo specifying the coordinates:
+
+    $ python3 streetview_uploader.py \
+        --client_secrets=/path/to/client_secrets \
+        --googlemaps_key=GOOGLE_MAPS_API_KEY \
+        --developer_key=API_KEY_OF_THE_GCP_PROJECT \
+        --photo=/path/to/photo_file \
+        --query="Googleplex Mountain View, CA"
+
+Example usage for video:
+
+    $ python3 streetview_uploader.py \
+        --client_secrets=/path/to/client_secrets \
+        --googlemaps_key=GOOGLE_MAPS_API_KEY \
+        --developer_key=API_KEY_OF_THE_GCP_PROJECT \
+        --video=/path/to/video_file
+
+"""
+
 import argparse
 import googlemaps
 import httplib2
@@ -11,9 +51,11 @@ from oauth2client import client
 from oauth2client import file
 from oauth2client import tools
 
+__author__ = 'luis@luislarco.com (Luis Larco)'
+
 _PARSER = argparse.ArgumentParser(
     description='Street View Uploader.', parents=[tools.argparser])
-_PARSER.add_argument('--googlemaps_key', required=True, type=str)
+_PARSER.add_argument('--googlemaps_key', required=False, type=str)
 _PARSER.add_argument('--lat', required=False, type=float, default=0.0)
 _PARSER.add_argument('--lon', required=False, type=float, default=0.0)
 _PARSER.add_argument('--query', required=False, type=str)
@@ -23,7 +65,7 @@ _PARSER.add_argument(
 _PARSER.add_argument(
     '--video', required=False, type=str, default=None,
     help = ('Full path of stitched video file including GPMF track. Note that '
-            'uploading video requires being whitelisted for ALPHA_TESTER.'))
+            'uploading video requires being whitelisted for `ALPHA_TESTER`.'))
 _PARSER.add_argument(
     '--client_secrets',
     required=True,
@@ -98,7 +140,7 @@ def _find_place(query=None, lat=0.0, lon=0.0):
                 print('Place not found')
             return place_id
     else:
-        print('Either a query or a lat/lon must be provided.')
+        print('Either a query or a valid lat/lon must be provided.')
         return None
 
 
@@ -113,6 +155,7 @@ def _get_discovery_service_url(args):
 
 
 def _init_street_view_publish_api(args):
+    """Initializes the Street View Publish API client."""
     global _STREET_VIEW_PUBLISH_API
     credentials = _get_credentials(args)
     http = credentials.authorize(httplib2.Http())
@@ -126,6 +169,7 @@ def _init_street_view_publish_api(args):
 
 
 def _init_google_maps_api(args):
+    """Initializes the Google Maps API client."""
     global _GOOGLE_MAPS_API
     _GOOGLE_MAPS_API = googlemaps.Client(key=args.googlemaps_key)
 
@@ -167,6 +211,7 @@ def _upload_file_resumable(args, uploadUrl, contentType):
     chunk_size = 20 * 1024 * 1024 # 20 MiB
     offset = 0
     f = open(args.video, 'rb')
+    # TODO: use https://github.com/tqdm/tqdm to display progress bar.
     while (offset < (fileSize - chunk_size)):
         headers = {
             'Authorization': 'Bearer ' + access_token,
@@ -217,6 +262,7 @@ def _upload_file(args, uploadUrl, contentType):
 
 
 def _upload_photo(args):
+    # TODO: extract the lat/lon from the photo bytes.
     placeId = _find_place(args.query, args.lat, args.lon)
     if placeId is not None:
         print(f'Place id: {placeId}')
@@ -250,11 +296,14 @@ def _upload_photo_sequence(args):
     print('Photo sequence created: %s' % photoSequenceResponse['name'])
 
 
+def _is_whitelisted_api():
+    return 'photoSequence' in _STREET_VIEW_PUBLISH_API
+
+
 def main():
     args = _PARSER.parse_args()
     global _GOOGLE_MAPS_API
     global _STREET_VIEW_PUBLISH_API
-    _init_google_maps_api(args)
     _init_street_view_publish_api(args)
 
     if (args.photo is not None and args.video is not None):
@@ -262,9 +311,17 @@ def main():
               'but not both.')
         sys.exit(1)
 
-    if (args.photo is not None):
+    if args.photo is not None:
+        if args.googlemaps_key is None:
+            print('A valid Google Maps API key must be provided.')
+            sys.exit(1)
+        _init_google_maps_api(args)
         _upload_photo(args)
-    elif(args.video is not None):
+    elif args.video is not None:
+        if not _is_whitelisted_api():
+            print(('The GCP project with the `developer_key` provided is not '
+                   'whitelisted to use Photo Sequences.'))
+           sys.exit(1)
         _upload_photo_sequence(args)
     else:
         print('Either a photo or a photo sequence must be provided.')
