@@ -320,8 +320,8 @@ def main():
     elif args.video is not None:
         if not _is_whitelisted_api():
             print(('The GCP project with the `developer_key` provided is not '
-                   'whitelisted to use Photo Sequences.'))
-           sys.exit(1)
+                'whitelisted to use Photo Sequences.'))
+            sys.exit(1)
         _upload_photo_sequence(args)
     else:
         print('Either a photo or a photo sequence must be provided.')
