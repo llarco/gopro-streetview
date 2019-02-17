@@ -297,7 +297,7 @@ def _upload_photo_sequence(args):
 
 
 def _is_whitelisted_api():
-    return 'photoSequence' in _STREET_VIEW_PUBLISH_API
+    return 'photoSequence' in dir(_STREET_VIEW_PUBLISH_API)
 
 
 def main():
