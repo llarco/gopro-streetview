@@ -17,7 +17,7 @@ To install the requirements, run the following command:
 
 ```
 $ pip3 install googlemaps httplib2 numpy google-auth \
-               google-auth-httplib2 google-api-python-client
+               google-auth-httplib2 google-api-python-client tqdm
 ```
 
 ## Example usage for photo specifying the coordinates:

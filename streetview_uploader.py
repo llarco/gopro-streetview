@@ -46,6 +46,7 @@ import os
 import subprocess
 import sys
 import requests
+import tqdm
 from apiclient import discovery
 from oauth2client import client
 from oauth2client import file
@@ -79,12 +80,12 @@ _VIDEO_CONTENT_TYPE = 'video/mp4'
 
 _GOOGLE_MAPS_API = None
 _RADIUS_NEARBY_LOOKUP_IN_METERS = 10
-_LABEL = "ALPHA_TESTER"
+_LABEL = 'ALPHA_TESTER'
 
 _API_NAME = 'streetviewpublish'
 _API_VERSION = 'v1'
 _SCOPES = 'https://www.googleapis.com/auth/streetviewpublish'
-_DISCOVERY_SERVICE_URL = "https://%s.googleapis.com/$discovery/rest?version=%s"
+_DISCOVERY_SERVICE_URL = 'https://%s.googleapis.com/$discovery/rest?version=%s'
 _APPLICATION_NAME = 'Street View Publish API Python'
 _STREET_VIEW_PUBLISH_API = None
 _CREDENTIALS_DIRECTORY_NAME = '.credentials'
@@ -127,14 +128,14 @@ def _pick_place(results):
 def _find_place(query=None, lat=0.0, lon=0.0):
     global _GOOGLE_MAPS_API
     if query is not None:
-        places = _GOOGLE_MAPS_API.places(query=query, type="establishment")
+        places = _GOOGLE_MAPS_API.places(query=query, type='establishment')
         place_id = _pick_place(places['results'])
         if place_id is None:
             print('Place not found')
         return place_id
     elif not numpy.isclose(lat, 0.0) and not numpy.isclose(lon, 0.0):
             places = _GOOGLE_MAPS_API.places_nearby(
-                location=(lat,lon), radius=_RADIUS_NEARBY_LOOKUP_IN_METERS, type="establishment")
+                location=(lat,lon), radius=_RADIUS_NEARBY_LOOKUP_IN_METERS, type='establishment')
             place_id = _pick_place(places['results'])
             if place_id is None:
                 print('Place not found')
@@ -148,9 +149,9 @@ def _get_discovery_service_url(args):
   """Returns the discovery service url."""
   discovery_service_url = _DISCOVERY_SERVICE_URL % (_API_NAME, _API_VERSION)
   if args.developer_key is not None:
-    discovery_service_url += "&key=%s" % args.developer_key
+    discovery_service_url += ''&key=%s' % args.developer_key
   if _LABEL is not None:
-    discovery_service_url += "&labels=%s" % _LABEL
+    discovery_service_url += ''&labels=%s' % _LABEL
   return discovery_service_url
 
 
@@ -197,6 +198,7 @@ def _get_headers(credentials, photo_size, contentType):
 def _upload_file_resumable(args, uploadUrl, contentType):
     access_token = _get_credentials(args).access_token
     fileSize = os.stat(args.video).st_size
+    # TODO: refactor code to use single function to build headers
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Content-Length': '0',
@@ -208,11 +210,12 @@ def _upload_file_resumable(args, uploadUrl, contentType):
     resumableUrl = requests.post(uploadUrl, headers=headers)
     resumableUrl = resumableUrl.headers['X-Goog-Upload-URL']
 
-    chunk_size = 20 * 1024 * 1024 # 20 MiB
-    offset = 0
+    chunk_size = 1 * 1024 * 1024 # 20 MiB
     f = open(args.video, 'rb')
-    # TODO: use https://github.com/tqdm/tqdm to display progress bar.
-    while (offset < (fileSize - chunk_size)):
+
+    num_of_chunks = int(fileSize / chunk_size)
+    for i in tqdm.trange(num_of_chunks):
+        offset = chunk_size * i
         headers = {
             'Authorization': 'Bearer ' + access_token,
             'Content-Length': str(chunk_size),
@@ -221,14 +224,12 @@ def _upload_file_resumable(args, uploadUrl, contentType):
         }
         f.seek(offset)
         data = f.read(chunk_size)
-        chunk_response = requests.post(resumableUrl, data=data, headers=headers)
-        if (chunk_response.status_code != 200):
-            print ('Error: %s' % chunk_response.headers)
-            sys.exit()
-        offset = offset + chunk_size
-        print ("Done {0:.2f}%".format(offset / fileSize * 100), end="\r")
-
-    last_chunk = fileSize - offset
+        response = requests.post(resumableUrl, data=data, headers=headers)
+        if (response.status_code != 200):
+            print ('Error: %s, %s' % response.headers, response.reason)
+            sys.exit(1)
+    last_chunk = fileSize % chunk_size
+    offset = chunk_size * num_of_chunks
     headers = {
         'Authorization': 'Bearer ' + access_token,
         'Content-Length': str(last_chunk),
@@ -237,10 +238,11 @@ def _upload_file_resumable(args, uploadUrl, contentType):
     }
     f.seek(offset)
     data = f.read(last_chunk)
-    chunk_response = requests.post(resumableUrl, data=data, headers=headers)
-    if (chunk_response.status_code != 200):
-        print ('Error: %s' % chunk_response.headers)
-        sys.exit()
+    print ('Uploading last chunk')
+    response = requests.post(resumableUrl, data=data, headers=headers)
+    if (response.status_code != 200):
+        print ('Error: %s, %s' % response.headers, response.reason)
+        sys.exit(1)
     print ('Done uploading!')
     print ('Upload URL: %s' % uploadUrl)
 
@@ -292,7 +294,7 @@ def _upload_photo_sequence(args):
             'uploadReference': {'uploadUrl': uploadUrl},
     }
     photoSequenceResponse = _STREET_VIEW_PUBLISH_API.photoSequence().create(
-        body=photoSequenceRequest, inputType="VIDEO").execute()
+        body=photoSequenceRequest, inputType='VIDEO').execute()
     print('Photo sequence created: %s' % photoSequenceResponse['name'])
 
 
